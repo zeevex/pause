@@ -56,6 +56,11 @@ module Pause
         redis.del (increment_keys + rate_limited_keys)
       end
 
+      def delete_key(key)
+        redis.del(white_key(key))
+        redis.del(rate_limited_key(key))
+      end
+
       def disable(scope)
         redis.set("disabled:#{scope}", "1")
       end

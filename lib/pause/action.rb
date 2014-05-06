@@ -88,6 +88,10 @@ module Pause
       Pause.analyzer.adapter.delete_rate_limited_keys(self.class_scope)
     end
 
+    def unblock
+      Pause.analyzer.adapter.delete_key(self.key)
+    end
+
     def key
       "#{self.scope}:#{@identifier}"
     end
