@@ -48,6 +48,10 @@ module Pause
       end
 
       def all_keys(scope)
+        (tracked_keys(scope) + rate_limited_keys(scope)).uniq
+      end
+
+      def tracked_keys(scope)
         keys(white_key(scope))
       end
 
@@ -56,10 +60,11 @@ module Pause
       end
 
       def delete_rate_limited_keys(scope)
-        ids = rate_limited_keys(scope)
+        ids = all_keys(scope)
         increment_keys = ids.map{ |key| white_key(scope, key) }
         rate_limited_keys = ids.map{ |key| rate_limited_key(scope, key) }
-        redis.del (increment_keys + rate_limited_keys)
+        keys2delete = increment_keys + rate_limited_keys
+        redis.del(keys2delete) unless keys2delete.empty?
       end
 
       def delete_key(key)
