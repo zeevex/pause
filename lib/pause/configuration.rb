@@ -1,6 +1,6 @@
 module Pause
   class Configuration
-    attr_writer :redis_host, :redis_port, :redis_db, :resolution, :history
+    attr_writer :redis_host, :redis_port, :redis_db, :resolution, :history, :namespace, :redis_client
 
     def configure
       yield self
@@ -25,6 +25,14 @@ module Pause
 
     def history
       (@history || 86400).to_i
+    end
+
+    def namespace
+      @namespace || ''
+    end
+
+    def redis_client
+      @redis_client
     end
   end
 end
