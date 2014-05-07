@@ -1,4 +1,5 @@
 require 'pause/helper/timing'
+require 'redis-namespace'
 
 module Pause
   module Redis
@@ -85,9 +86,21 @@ module Pause
       private
 
       def redis
-        @redis_conn ||= ::Redis.new(host: Pause.config.redis_host,
-                                    port: Pause.config.redis_port,
-                                    db:   Pause.config.redis_db)
+        @redis_conn ||= begin 
+          conn = if config.redis_client
+            config.redis_client
+          else
+            ::Redis.new(host: Pause.config.redis_host,
+                        port: Pause.config.redis_port,
+                          db: Pause.config.redis_db)
+          end
+
+          if config.namespace
+            conn = ::Redis::Namespace.new(config.namespace, :redis => conn)
+          end
+
+          conn
+        end
       end
 
       def white_key(scope, key = nil)
