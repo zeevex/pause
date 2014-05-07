@@ -34,7 +34,12 @@ module Pause
       end
 
       def rate_limit!(key, block_ttl)
-        redis.setex(rate_limited_key(key), block_ttl, nil)
+        rlkey = rate_limited_key(key)
+        current_ttl = redis.ttl(rlkey)
+        # returns -1 or -2 for no current expiration or no such key
+        if block_ttl > current_ttl
+          redis.setex(rlkey, block_ttl, nil)
+        end
       end
 
       def rate_limited?(key)
