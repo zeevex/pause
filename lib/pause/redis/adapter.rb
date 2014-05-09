@@ -91,21 +91,28 @@ module Pause
       private
 
       def redis
-        @redis_conn ||= begin 
-          conn = if Pause.config.redis_client
-            Pause.config.redis_client
-          else
-            ::Redis.new(host: Pause.config.redis_host,
-                        port: Pause.config.redis_port,
-                          db: Pause.config.redis_db)
-          end
-
-          if Pause.config.namespace
-            conn = ::Redis::Namespace.new(Pause.config.namespace, :redis => conn)
-          end
-
-          conn
+        # reconnect after fork
+        if !@redis_conn || @redis_conn[1] != Process.pid
+          @redis_conn = [_make_redis_client, Process.pid]
         end
+
+        @redis_conn[0]
+      end
+
+      def _make_redis_client
+        conn = if Pause.config.redis_client
+          Pause.config.redis_client
+        else
+          ::Redis.new(host: Pause.config.redis_host,
+                      port: Pause.config.redis_port,
+                        db: Pause.config.redis_db)
+        end
+
+        if Pause.config.namespace
+          conn = ::Redis::Namespace.new(Pause.config.namespace, :redis => conn)
+        end
+
+        conn
       end
 
       def white_key(scope, key = nil)
