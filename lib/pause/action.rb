@@ -2,9 +2,17 @@ module Pause
   class Action
     attr_accessor :identifier
 
-    def initialize(identifier)
+    def initialize(identifier, options = {})
       @identifier = identifier
       self.class.checks = [] unless self.class.instance_variable_get(:@checks)
+
+      @fail_open =  if options.has_key?(:fail_open)
+                      options[:fail_open]
+                    elsif self.class.class_variable_defined?(:@@class_fail_open)
+                      self.class.class_variable_get(:@@class_fail_open)
+                    else
+                      false
+                    end
     end
 
     # Action subclasses should define their scope as follows
@@ -20,6 +28,18 @@ module Pause
     def self.scope(scope_identifier = nil)
       class_variable_set(:@@class_scope, scope_identifier)
       define_method(:scope) { scope_identifier }
+    end
+
+    def self.fail_open(value = true)
+      class_variable_set(:@@class_fail_open, value)
+    end
+
+    def self.fail_closed(value = true)
+      class_variable_set(:@@class_fail_open, !value)      
+    end
+
+    def fail_open?
+      @fail_open
     end
 
     # Action subclasses should define their checks as follows
@@ -57,39 +77,53 @@ module Pause
       @checks = period_checks
     end
 
-    def increment!(count = 1, timestamp = Time.now.to_i)
+    def increment!(count = 1, timestamp = Time.now.to_i, options = {})
       Pause.analyzer.increment(self, timestamp, count)
+    rescue ::Redis::CannotConnectError
+      options.fetch(:fail_open, fail_open?) ? true : raise
     end
 
     def rate_limited?
       ! ok?
     end
 
-    def ok?
+    def ok?(options = {})
       !Pause.analyzer.adapter.rate_limited?(self.key) && Pause.analyzer.check(self).nil?
     rescue ::Redis::CannotConnectError => e
       $stderr.puts "Error connecting to redis: #{e.inspect}"
-      false
+      options.fetch(:fail_open, fail_open?) ? true : false
     end
 
-    def analyze
+    def analyze(options = {})
       Pause.analyzer.check(self)
+    rescue ::Redis::CannotConnectError
+      options.fetch(:fail_open, fail_open?) ? nil : raise      
     end
 
     def self.tracked_identifiers
       Pause.analyzer.tracked_identifiers(self.class_scope)
+    rescue ::Redis::CannotConnectError
+      fail_open? ? [] : raise
     end
 
     def self.rate_limited_identifiers
       Pause.analyzer.rate_limited_identifiers(self.class_scope)
+    rescue ::Redis::CannotConnectError
+      fail_open? ? [] : raise
     end
 
     def self.unblock_all
       Pause.analyzer.adapter.delete_rate_limited_keys(self.class_scope)
+      true
+    rescue ::Redis::CannotConnectError
+      fail_open? ? true : raise
     end
 
     def unblock
       Pause.analyzer.adapter.delete_key(self.key)
+      true
+    rescue ::Redis::CannotConnectError
+      fail_open? ? true : raise
     end
 
     def key
@@ -113,10 +147,15 @@ module Pause
 
     def self.disable
       Pause.analyzer.adapter.disable(class_scope)
+      true
+    rescue ::Redis::CannotConnectError
+      fail_open? ? true : raise
     end
 
     def self.enabled?
       Pause.analyzer.adapter.enabled?(class_scope)
+    rescue ::Redis::CannotConnectError
+      fail_open? ? true : raise
     end
 
     def self.disabled?
